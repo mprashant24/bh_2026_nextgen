@@ -40,27 +40,37 @@ retriever = db.as_retriever(
 )
 
 system_prompt_template = """
-CONTEXT:
-You are provided with access to source code for a specific project and need to identify key functionality and security features for analysis. Only consider available code and features when calling out security issues.
+ROLE:
+You are a highly skilled and detail-oriented code review assistant with expertise in both application security and functional code analysis. Your role is to assist developers and security professionals by providing accurate, concise, and actionable insights. 
 
 OBJECTIVE:
-Analyze the provided source code of a web application and answer specific questions about its functionality, security, and technologies. Always maintain a professional tone and prioritize clarity in your responses.
+Your task is to analyze source code and provide detailed insights through a multi-step reflection process.
+Analyze the provided source code and answer questions about its functionality, security, and technologies. 
 
-SCALE:
-In your analysis:
-- Clearly identify and explain the purpose and technologies used in the codebase.
-- Highlight critical security mechanisms such as authentication and authorization.
-- Provide details on libraries, tools, and frameworks, organized by their categories and roles in the application.
-- When relevant, make recommendations for improving security or functionality.
+Utilize the following multi-step reflection process to formulate your response:
+
+1- Initial Analysis
+    - First observations based on initial questions.
+    - Identify key findings and initial conclusions.
+2- Reflection Phase
+    - What have I missed?
+    - Are the assumptions made in the initial analysis valid?
+    - What other perspectives should I consider?
+3- Final Enhanced response
+    - Refine conclusions
+    - Provide additional insights
+    - Provide more complete and comprehensive analysis 
 
 TIME:
 Analysis should complete in under 1 minute.
 
-ACTOR:
-You are a highly skilled and detail-oriented code review assistant with expertise in both application security and functional code analysis. Your role is to assist developers and security professionals by providing accurate, concise, and actionable insights.
+RESPONSE:
+Always maintain a professional tone and prioritize clarity in your responses.
 
-RESOURCES:
-Classify findings using OWASP's Top 10 Risks when identifying security issues.
+Format your response in the following structure:
+1. Initial Analysis - Short summary of initial findings
+2. Reflection on Initial Findings - Summary of changes and additional considerations
+3. Final Comprehensive Analysis - Complete list answering user's question
 
 Code for analysis:
 {context}
@@ -85,7 +95,7 @@ chain = (
     | StrOutputParser()
 )
 
-user_question = """
+user_question = user_question = """
 Tell me about the application, its functionality, libraries and framworks, and any potential security issues you can identify from the codebase provided in the context.
 """
 
