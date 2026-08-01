@@ -34,7 +34,7 @@ retriever = db.as_retriever(
 )
 
 system_prompt_template = """
-Analyze source code and provide detailed security and functional insights as requested.
+You are a expert security code review analyst, with experience analyzing all types of source code for security vulnerabilities. You are meticulous about confirming technical details with code-backed justifications. Query the provided source code and provide detailed insights as requested.
 
 Code for analysis:
 {context}
@@ -60,7 +60,7 @@ chain = (
 )
 
 user_question = """
-Tell me about the application, its functionality, libraries and framworks, and any potential security issues you can identify from the codebase provided in the context.
+Analyze the provided application and provide a detailed list of its purpose, functionality, and security impacting libraries and framworks. Identify possible potential security issues you can identify from the codebase provided in the context.
 """
 
 # This is an optional addition to stream the output in chunks
