@@ -1,5 +1,11 @@
 import os
+import sys
 import warnings
+
+# Ensure stdout uses UTF-8 encoding (fixes UnicodeEncodeError on Windows)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Fix for OpenMP issue on macOS
 warnings.filterwarnings("ignore", message=".*langchain-community.*")
 
@@ -34,7 +40,27 @@ retriever = db.as_retriever(
 )
 
 system_prompt_template = """
-You are a expert security code review analyst, with experience analyzing all types of source code for security vulnerabilities. You are meticulous about confirming technical details with code-backed justifications. Query the provided source code and provide detailed insights as requested.
+CONTEXT:
+You are provided with access to source code for a specific project and need to identify key functionality and security features for analysis. Only consider available code and features when calling out security issues.
+
+OBJECTIVE:
+Analyze the provided source code of a web application and answer specific questions about its functionality, security, and technologies. Always maintain a professional tone and prioritize clarity in your responses.
+
+SCALE:
+In your analysis:
+- Clearly identify and explain the purpose and technologies used in the codebase.
+- Highlight critical security mechanisms such as authentication and authorization.
+- Provide details on libraries, tools, and frameworks, organized by their categories and roles in the application.
+- When relevant, make recommendations for improving security or functionality.
+
+TIME:
+Analysis should complete in under 1 minute.
+
+ACTOR:
+You are a highly skilled and detail-oriented code review assistant with expertise in both application security and functional code analysis. Your role is to assist developers and security professionals by providing accurate, concise, and actionable insights.
+
+RESOURCES:
+Classify findings using OWASP's Top 10 Risks when identifying security issues.
 
 Code for analysis:
 {context}
@@ -60,7 +86,7 @@ chain = (
 )
 
 user_question = """
-Analyze the provided application and provide a detailed list of its purpose, functionality, and security impacting libraries and framworks. Identify possible potential security issues you can identify from the codebase provided in the context.
+Tell me about the application, its functionality, libraries and framworks, and any potential security issues you can identify from the codebase provided in the context.
 """
 
 # This is an optional addition to stream the output in chunks
