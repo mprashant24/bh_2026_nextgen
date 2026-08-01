@@ -24,7 +24,7 @@ from langchain_aws import ChatBedrock
 from langchain_aws import BedrockEmbeddings
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-faiss_db_path = os.path.join(SCRIPT_DIR, "..", "..", "vector_databases", "juice_shop.faiss")
+faiss_db_path = os.path.join(SCRIPT_DIR, "..", "..", "vector_databases", "bridge_troll.faiss")
 db = FAISS.load_local(
     faiss_db_path,
     BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0"),
@@ -77,7 +77,7 @@ llm = ChatBedrock(
 )
 
 
-knowledge_base_file_path = os.path.join(SCRIPT_DIR, "juice_shop_knowledgebase.md")
+knowledge_base_file_path = os.path.join(SCRIPT_DIR, "bridge_troll_knowledgebase.md")
 with open(knowledge_base_file_path, "r", encoding="utf-8") as file:
     context = file.read()
 
