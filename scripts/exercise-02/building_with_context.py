@@ -1,5 +1,11 @@
 import os
+import sys
 import warnings
+
+# Ensure stdout uses UTF-8 encoding (fixes UnicodeEncodeError on Windows)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Fix for OpenMP issue on macOS
 warnings.filterwarnings("ignore", message=".*langchain-community.*")
 
