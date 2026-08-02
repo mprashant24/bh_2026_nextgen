@@ -133,7 +133,15 @@ Assign a **Security Relevance Rating** (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) to 
 
 ## 4. Route Inventory Output Template
 
-Present the completed route inventory using a **Hierarchical Route Table**, where each route acts as a section header row, and its parameters are listed underneath as child rows:
+Present the completed route inventory as a **Single 2-Column Table** sorted strictly in ascending order of Review Priority Number (`#1`, `#2`, `#3`, ...):
+
+1. **First Column (`Route / Security Attribute`)**:
+   - For **Route Header Rows**: Format as `#<PriorityNumber>: <METHOD> <ROUTE_PATH>` (e.g., `#1: POST /chapters/:chapter_id/leaders`).
+   - For **Security Decorator Sub-Rows**: Format as `├── Attribute Name` (e.g., `├── Handler`, `├── Authentication`, `├── Known Flaws / Risks`).
+2. **Second Column (`Details / Value`)**:
+   - For **Route Header Rows**: Contains a concise **Functional Summary** statement (1-2 sentences, max 20-25 words).
+   - For **Security Decorator Sub-Rows**: Displays the specific attribute details/value.
+3. **Sparse Decorators**: **ONLY include rows for security decorators that are PRESENT**. Do NOT add blank rows or empty cells if a decorator is not present/applicable.
 
 ```markdown
 # Application Route Security Inventory
@@ -150,32 +158,47 @@ Present the completed route inventory using a **Hierarchical Route Table**, wher
 
 ---
 
-## Hierarchical Route Inventory Table
+## Route Inventory Table (Sorted by Priority Rank)
 
-| Level / Parameter Name | Method / Location | Handler / Protocol | Exposure & Auth Status | Roles / Data Class | Privileges / Risk Flaws | Rank | Degree |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **ROUTE: `/auth/login`** | `POST` | `controllers/auth.js:login` | EXTERNAL / HTTPS / PUBLIC | None | Session Token Grant / User Enum | **CRITICAL** | 1st |
-| ├── `username` | BODY | String | STANDARD_INPUT | PII | User Enumeration Risk | - | - |
-| ├── `password` | BODY | String | CREDENTIALS_SECRET | Credentials | Plaintext Logging / Brute Force Risk | - | - |
-| └── `project` | BODY | Integer ID | HIGH_RISK_CONTROL | Internal ID | Unvalidated Scope Override | - | - |
-| **ROUTE: `/system/information`** | `GET` | `controllers/system.js:info` | EXTERNAL / HTTPS / PUBLIC | None | Read-only / System Info Leak | **CRITICAL** | 1st |
-| └── *(No parameters)* | - | - | - | - | - | - | - |
-| **ROUTE: `/ws/notifications`** | `WS` | `controllers/ws.js:connect` | EXTERNAL / WSS / AUTH | User | Real-time Stream / Unencrypted WS Risk | **HIGH** | 1st |
-| └── `token` | QUERY | JWT Token | CREDENTIALS_SECRET | Auth Token | Token Leakage in Query String | - | - |
-| **ROUTE: `/admin/roles`** | `POST` | `controllers/admin/roles.js:create` | EXTERNAL / HTTPS / AUTH | Admin | Role Creation / Privilege Escalation | **CRITICAL** | 1st |
-| ├── `x-access-token` | HEADER | JWT Token | CREDENTIALS_SECRET | Auth Token | Session Hijacking / Weak Secret | - | - |
-| └── `label` | BODY | String | HIGH_RISK_CONTROL | System Roles | Unauthorized Admin Role Creation | - | - |
-| **ROUTE: `/medical/patients/:id`** | `GET` | `controllers/medical/patients.js:detail` | EXTERNAL / HTTPS / AUTH | Doctor, Nurse | Patient Read / Potential IDOR | **HIGH** | 1st |
-| ├── `x-access-token` | HEADER | JWT Token | CREDENTIALS_SECRET | Auth Token | Session Authentication | - | - |
-| └── `:id` | PATH | UUID / Int | HIGH_RISK_CONTROL | PHI, PII | BOLA / IDOR Primary Key Lookup | - | - |
-| **ROUTE: `/internal/metrics`** | `GET` | `controllers/system.js:metrics` | INTERNAL_PRIVATE / HTTP / AUTH | Internal Monitor | System Metrics / Unencrypted Internal HTTP | **LOW** | 2nd |
-| └── *(No parameters)* | - | - | - | - | - | - | - |
-| **ROUTE: `/groups/:key/:id`** | `POST` | `controllers/groups.js:updateSubs` | EXTERNAL / HTTPS / AUTH | Accountant | Subscription Update / SQLi Risk | **CRITICAL** | 1st |
-| ├── `:key` | PATH | String | HIGH_RISK_CONTROL | Table Mapping | SQLi via String Concatenation | - | - |
-| ├── `:id` | PATH | UUID / Binary | HIGH_RISK_CONTROL | Financial | Unvalidated ID Lookup | - | - |
-| └── `subscriptions` | BODY | Array of IDs | FINANCIAL_DATA | Financial | Bulk Subsidy Assignment Flaw | - | - |
-| **ROUTE: `/languages`** | `GET` | `controllers/admin/languages.js:list` | EXTERNAL / HTTPS / PUBLIC | None | Read-only / Static Metadata | **LOW** | 2nd |
-| └── `lang` | QUERY | String | STANDARD_INPUT | Public Metadata | Input Reflection | - | - |
+| Route / Security Attribute | Details / Value |
+| :--- | :--- |
+| **`#1: POST /auth/login`** | **Functional Summary**: Authenticates user credentials and issues session JWT tokens for authorized system access. |
+| ├── **Handler** | `controllers/auth.js:login` |
+| ├── **Type & Exposure** | `AUTHENTICATION / EXTERNAL_INTERNET_EXPOSED (HTTPS)` |
+| ├── **Authentication** | `UNAUTHENTICATED / PUBLIC` |
+| ├── **Sensitive Data** | `CREDENTIALS, PII` |
+| ├── **Secure Parameters** | `BODY: username (PII), password (CREDENTIALS_SECRET), project (HIGH_RISK_CONTROL)` |
+| ├── **Known Flaws / Risks** | `User Enumeration, Brute Force Risk` |
+| └── **Degree Connection** | `1st Degree (CRITICAL)` |
+| **`#2: POST /admin/roles`** | **Functional Summary**: Creates new system security roles and assigns system-wide permission policies. |
+| ├── **Handler** | `controllers/admin/roles.js:create` |
+| ├── **Type & Exposure** | `ADMINISTRATIVE / EXTERNAL_INTERNET_EXPOSED (HTTPS)` |
+| ├── **Authentication** | `AUTHENTICATED (JWT Session)` |
+| ├── **Roles Required** | `System Admin` |
+| ├── **Secure Parameters** | `HEADER: x-access-token (CREDENTIALS_SECRET), BODY: label (HIGH_RISK_CONTROL)` |
+| ├── **Privileges Needed** | `SYSTEM_ADMIN` |
+| ├── **Known Flaws / Risks** | `Unchecked Privilege Escalation` |
+| └── **Degree Connection** | `1st Degree (CRITICAL)` |
+| **`#3: GET /system/information`** | **Functional Summary**: Exposes system operational metrics and environment configuration details for administrative monitoring. |
+| ├── **Handler** | `controllers/system.js:info` |
+| ├── **Type & Exposure** | `DEBUG_DIAGNOSTIC / EXTERNAL_INTERNET_EXPOSED (HTTPS)` |
+| ├── **Authentication** | `UNAUTHENTICATED / PUBLIC` |
+| ├── **Known Flaws / Risks** | `Sensitive System Metadata Exposure` |
+| └── **Degree Connection** | `1st Degree (CRITICAL)` |
+| **`#4: GET /medical/patients/:id`** | **Functional Summary**: Retrieves complete patient clinical medical history, diagnoses, and personal contact details by patient ID. |
+| ├── **Handler** | `controllers/medical/patients.js:detail` |
+| ├── **Type & Exposure** | `BUSINESS_LOGIC / EXTERNAL_INTERNET_EXPOSED (HTTPS)` |
+| ├── **Authentication** | `AUTHENTICATED (JWT Session)` |
+| ├── **Roles Required** | `Doctor, Nurse` |
+| ├── **Sensitive Data** | `PHI, PII` |
+| ├── **Secure Parameters** | `PATH: :id (HIGH_RISK_CONTROL / Primary Key)` |
+| ├── **Known Flaws / Risks** | `Potential BOLA / IDOR` |
+| └── **Degree Connection** | `1st Degree (HIGH)` |
+| **`#5: GET /languages`** | **Functional Summary**: Returns public list of supported application interface languages for localization. |
+| ├── **Handler** | `controllers/admin/languages.js:list` |
+| ├── **Type & Exposure** | `ADMINISTRATIVE / EXTERNAL_INTERNET_EXPOSED (HTTPS)` |
+| ├── **Authentication** | `UNAUTHENTICATED / PUBLIC` |
+| └── **Degree Connection** | `2nd Degree (LOW)` |
 
 ---
 
@@ -188,4 +211,20 @@ Present the completed route inventory using a **Hierarchical Route Table**, wher
 ### Second-Degree Dependency Targets
 1. `[LOW]` **`<Route>`**: Connected to `<First-Degree Route>` via `<Calling/Called Relationship>`.
 ```
+
+---
+
+## 5. Report Generation & Persistence Requirements
+
+1. **Mandatory File Output**:
+   - The generated route inventory report **MUST always be saved as a Markdown (`.md`) file** in the workspace.
+   - Do NOT rely solely on printing the report to chat output.
+
+2. **Automatic Location Inference**:
+   - Infer the destination folder from the user prompt or active workspace context:
+     - **Exercise-Specific Tasks**: Save next to the relevant exercise folder (e.g., `scripts/extras/exercise-14/<app_name>_route_inventory.md` or `scripts/exercise-02/<app_name>_route_inventory.md`).
+     - **Repository / Root Analysis**: Save in the root or `docs/` folder of the target repository (e.g., `docs/<app_name>_route_inventory.md`).
+
+3. **User Prompting when Location Unclear**:
+   - If the target file path cannot be inferred automatically from the context or exercise instructions, the agent **MUST ask the user** for the preferred destination path (using `vscode_askQuestions` or direct prompt) before generating or saving the file.
 
