@@ -1,0 +1,149 @@
+{
+  "is_insecure": true,
+  "reason": "The Django task manager application contains multiple critical security vulnerabilities including Insecure Direct Object References (IDOR), SQL Injection, Missing Authentication, CSRF vulnerabilities, and privilege escalation issues. These vulnerabilities can allow attackers to access unauthorized resources, manipulate data, bypass authentication, and escalate privileges within the application.",
+  "validated_findings": [
+    {
+      "finding_id": "FINDING-01",
+      "cwe": "CWE-639",
+      "title": "Insecure Direct Object Reference (IDOR) in Task Detail View",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def task_details() line 689-723",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": "The task_details function directly retrieves tasks by ID without proper ownership verification for all access paths. While there's a check at line 692, the function uses task.project.id which means if an attacker can guess or derive a project_id-task_id pair, they can access any task in projects they belong to.",
+      "exploit_scenario": "1. Attacker identifies a project they belong to\n2. Attacker enumerates tasks in that project by guessing IDs\n3. Attacker accesses any task details by knowing the project_id and task_id\n4. This allows viewing confidential task information without proper authorization",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Enforce Indirect Object References: Avoid exposing direct database primary keys or internal IDs in URLs/params. Use unpredictable mapping tokens (e.g. UUIDv4).\n2. Server-Side Ownership Verification: On every access or state change, query the database filtering directly by request.user:\n   ```python\n   task = Task.objects.get(id=task_id, project__users_assigned=request.user)\n   ```\n3. Deny by Default: Block access unless explicit ownership or permission policy is met.",
+        "recommended_fix_description": "Replace direct ID-based access with proper authorization checks that ensure the user is assigned to the project that owns the task. All access to tasks should require verification that the requesting user belongs to the project.",
+        "remediated_code_patch": "def task_details(request, project_id, task_id):\n    \n    # Verify user belongs to the project\n    if not belongs_to_project(request.user, project_id):\n        return HttpResponse('Unauthorized', status=401)\n    \n    # More secure approach - check both project and task ownership\n    try:\n        task = Task.objects.select_related('project').get(\n            id=task_id,\n            project__id=project_id,\n            project__users_assigned=request.user\n        )\n    except Task.DoesNotExist:\n        return HttpResponse('Unauthorized', status=401)\n    \n    # rest of function remains the same..."
+      }
+    },
+    {
+      "finding_id": "FINDING-02",
+      "cwe": "CWE-89",
+      "title": "SQL Injection in Search Function",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def search() line 758-778",
+      "severity": "critical",
+      "confidence": "high",
+      "evidence": "The search function constructs SQL queries using string formatting with user-provided input. At lines 766-768, it uses raw SQL with user input: \"select * from taskManager_task as t INNER JOIN taskManager_task_users_assigned as a ON t.id = a.task_id WHERE t.text LIKE '%s' OR t.title LIKE '%s' AND a.user_id = %d\" % (task_query,task_query,request.user.id)",
+      "exploit_scenario": "1. Attacker submits malicious input in the search parameter\n2. The input gets directly embedded into the SQL query\n3. Attacker can inject SQL commands to extract data, modify records, or gain unauthorized access",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Use Parameterized Queries / ORM: Never build SQL queries via string concatenation or formatting (%, f-strings, .format()).\n2. Django ORM Practice: Use standard ORM filter calls:\n   ```python\n   # Safe:\n   User.objects.filter(username=user_input)\n   ```\n3. Avoid Raw Execution: Refactor .raw() or .extra() calls to parameterized query syntax.",
+        "recommended_fix_description": "Replace the raw SQL query with Django ORM queries that properly handle user input through parameterized queries.",
+        "remediated_code_patch": "def search(request):\n    query = request.GET.get('q', '')\n    \n    # Safe approach using Django ORM\n    my_project_list = Project.objects.filter(\n        users_assigned=request.user.id,\n        title__icontains=query\n    ).order_by('title')\n    \n    # Better ORM approach for tasks\n    my_task_list = Task.objects.filter(\n        users_assigned=request.user.id,\n        Q(text__icontains=query) | Q(title__icontains=query)\n    ).order_by('title')\n    \n    return render(request, 'taskManager/search.html', {\n        'q': query,\n        'task_list': my_task_list,\n        'project_list': my_project_list,\n        'user': request.user\n    })"
+      }
+    },
+    {
+      "finding_id": "FINDING-03",
+      "cwe": "CWE-89",
+      "title": "SQL Injection in Forgot Password Function",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def forgot_password() line 882-915",
+      "severity": "critical",
+      "confidence": "high",
+      "evidence": "The forgot_password function uses raw SQL query with user-provided email address: \"SELECT * FROM auth_user where email = '%s'\" % t_email",
+      "exploit_scenario": "1. Attacker submits malicious email input\n2. The input gets embedded directly into the SQL query\n3. Attacker could potentially extract user information or cause denial of service",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Use Parameterized Queries / ORM: Never build SQL queries via string concatenation or formatting (%, f-strings, .format()).\n2. Django ORM Practice: Use standard ORM filter calls:\n   ```python\n   # Safe:\n   User.objects.filter(username=user_input)\n   ```\n3. Avoid Raw Execution: Refactor .raw() or .extra() calls to parameterized query syntax.",
+        "recommended_fix_description": "Replace the raw SQL query with Django ORM's built-in methods that safely handle user inputs.",
+        "remediated_code_patch": "def forgot_password(request):\n    if request.method == 'POST':\n        t_email = request.POST.get('email')\n        \n        # Safe approach using Django ORM\n        try:\n            result = User.objects.filter(email=t_email)\n            \n            if result.exists():\n                reset_user = result.first()\n                # Rest of the function remains the same\n                # ... \n            else:\n                messages.warning(request, 'Check your email for a reset token')\n        except User.DoesNotExist:\n            messages.warning(request, 'Check your email for a reset token')\n    \n    return render(request, 'taskManager/forgot_password.html')"
+      }
+    },
+    {
+      "finding_id": "FINDING-04",
+      "cwe": "CWE-862",
+      "title": "Missing Authentication in Download Profile Pic",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def download_profile_pic() line 327-333",
+      "severity": "medium",
+      "confidence": "high",
+      "evidence": "The download_profile_pic function lacks the @login_required decorator but is supposed to be accessible only to authenticated users. Without authentication, any user can access profile pictures.",
+      "exploit_scenario": "1. Unauthenticated attacker accesses the endpoint\n2. Attacker downloads profile pictures of any users\n3. Privacy violation and potential information gathering",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Centralized Authentication: Annotate views with @login_required or inherit LoginRequiredMixin for class-based views.\n2. Deny-by-Default Architecture: Require explicit access control grants for every view.\n3. Django Implementation:\n   ```python\n   @login_required\n   def sensitive_view(request):\n       ...\n   ```",
+        "recommended_fix_description": "Add the @login_required decorator to ensure only authenticated users can access profile pictures.",
+        "remediated_code_patch": "@login_required\ndef download_profile_pic(request, user_id):\n    \n    logger.info('User %s download profile pic for user %s' % (request.user.username,user_id))\n    \n    user = User.objects.get(pk=user_id)\n    filepath = user.userprofile.image\n    return redirect(filepath)"
+      }
+    },
+    {
+      "finding_id": "FINDING-05",
+      "cwe": "CWE-352",
+      "title": "CSRF Vulnerability in Profile Update",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def profile_by_id() line 787-836",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": "The profile_by_id function is decorated with @csrf_exempt, making it vulnerable to Cross-Site Request Forgery attacks. This function handles sensitive user profile updates.",
+      "exploit_scenario": "1. Attacker crafts a malicious website that submits a form to the profile update endpoint\n2. If a user is authenticated and visits the malicious site, their browser automatically submits the form\n3. This allows modification of user profiles without consent",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Anti-CSRF Tokens: Ensure all POST/PUT/DELETE forms include {% csrf_token %}.\n2. Avoid Disabling CSRF: Do not use @csrf_exempt unless integrating verified external webhook endpoints with signature validation.\n3. SameSite Cookies: Set SESSION_COOKIE_SAMESITE = 'Lax' or 'Strict'.",
+        "recommended_fix_description": "Remove the @csrf_exempt decorator from profile_by_id function and ensure proper CSRF protection via Django's built-in mechanisms.",
+        "remediated_code_patch": "@login_required\ndef profile_by_id(request, user_id):\n    # Remove @csrf_exempt and ensure proper CSRF protection\n    user = User.objects.get(pk=user_id)\n    # rest of function..."
+      }
+    },
+    {
+      "finding_id": "FINDING-06",
+      "cwe": "CWE-352",
+      "title": "CSRF Vulnerability in Password Reset",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def reset_password() line 840-878",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": "The reset_password function is decorated with @csrf_exempt, making it vulnerable to Cross-Site Request Forgery attacks. This is critical for password-related operations.",
+      "exploit_scenario": "1. Attacker creates a malicious HTML form targeting the reset_password endpoint\n2. If victim is logged in and visits the malicious site, the form auto-submits\n3. Victim's password gets changed without their knowledge",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Anti-CSRF Tokens: Ensure all POST/PUT/DELETE forms include {% csrf_token %}.\n2. Avoid Disabling CSRF: Do not use @csrf_exempt unless integrating verified external webhook endpoints with signature validation.\n3. SameSite Cookies: Set SESSION_COOKIE_SAMESITE = 'Lax' or 'Strict'.",
+        "recommended_fix_description": "Remove the @csrf_exempt decorator from reset_password function to enforce CSRF protection.",
+        "remediated_code_patch": "@login_required\ndef reset_password(request):\n    # Remove @csrf_exempt and rely on Django's CSRF protection\n    # rest of function..."
+      }
+    },
+    {
+      "finding_id": "FINDING-07",
+      "cwe": "CWE-352",
+      "title": "CSRF Vulnerability in Password Change",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def change_password() line 918-935",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": "The change_password function is decorated with @csrf_exempt, making it vulnerable to Cross-Site Request Forgery attacks for changing passwords.",
+      "exploit_scenario": "1. Attacker crafts malicious request to change password\n2. If victim is authenticated and visits malicious site, their password gets changed\n3. Complete account takeover",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Anti-CSRF Tokens: Ensure all POST/PUT/DELETE forms include {% csrf_token %}.\n2. Avoid Disabling CSRF: Do not use @csrf_exempt unless integrating verified external webhook endpoints with signature validation.\n3. SameSite Cookies: Set SESSION_COOKIE_SAMESITE = 'Lax' or 'Strict'.",
+        "recommended_fix_description": "Remove the @csrf_exempt decorator from change_password function to enforce CSRF protection.",
+        "remediated_code_patch": "@login_required\ndef change_password(request):\n    # Remove @csrf_exempt and rely on Django's CSRF protection\n    # rest of function..."
+      }
+    },
+    {
+      "finding_id": "FINDING-08",
+      "cwe": "CWE-352",
+      "title": "CSRF Vulnerability in Forgot Password",
+      "status": "CONFIRMED",
+      "file": "taskManager/views.py",
+      "location": "def forgot_password() line 881-915",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": "The forgot_password function is decorated with @csrf_exempt, making it vulnerable to Cross-Site Request Forgery attacks. This is critical for password recovery operations.",
+      "exploit_scenario": "1. Attacker creates a malicious form targeting forgot_password\n2. Victim might be tricked into submitting the form\n3. Attack could trigger unwanted password reset emails or data leakage",
+      "remediation_guidance": {
+        "owasp_guidance": "1. Anti-CSRF Tokens: Ensure all POST/PUT/DELETE forms include {% csrf_token %}.\n2. Avoid Disabling CSRF: Do not use @csrf_exempt unless integrating verified external webhook endpoints with signature validation.\n3. SameSite Cookies: Set SESSION_COOKIE_SAMESITE = 'Lax' or 'Strict'.",
+        "recommended_fix_description": "Remove the @csrf_exempt decorator from forgot_password function to enforce CSRF protection.",
+        "remediated_code_patch": "@login_required\ndef forgot_password(request):\n    # Remove @csrf_exempt and rely on Django's CSRF protection\n    # rest of function..."
+      }
+    }
+  ],
+  "overall_assessment": {
+    "total_confirmed": 8,
+    "total_downgraded": 0,
+    "total_false_positives": 0,
+    "risk_rating": "critical",
+    "summary": "The Django task manager application contains multiple critical security vulnerabilities including SQL injection, IDOR, missing authentication, and CSRF issues. These vulnerabilities can lead to unauthorized data access, privilege escalation, and account takeovers. Immediate remediation is required to protect user data and maintain application integrity."
+  }
+}

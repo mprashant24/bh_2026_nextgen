@@ -1,11 +1,18 @@
+import os
+import sys
+import git
+
+# Ensure stdout uses UTF-8 encoding on Windows when redirected to a file
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from langchain_aws import ChatBedrockConverse
 from langchain_core.runnables import RunnableLambda
 from fetch_url_tool import FetchURLTool
+from owasp_cheatsheet_tool import OWASPCheatSheetTool
 from dotenv import load_dotenv
-import os
-import git
 
 
 load_dotenv()
@@ -30,8 +37,8 @@ llm = ChatBedrockConverse(
     temperature=0.6,
 )
 
-# Backend for local filesystem access - points to the repo directory
-filesystem_backend = FilesystemBackend(root_dir=repo_path, virtual_mode=False)
+# Backend for local filesystem access - strictly scoped to the repo directory
+filesystem_backend = FilesystemBackend(root_dir=repo_path, virtual_mode=True)
 
 # Skills setup — loaded into each agent's context as domain expertise
 skills_dir = os.path.join(SCRIPT_DIR, "skills")
@@ -47,6 +54,11 @@ for skill_name in os.listdir(skills_dir):
 prompt_collect_context = """You are a security engineer performing reconnaissance on a Python/Django codebase.
 Your ONLY job is to collect and organize code context relevant to access control.
 Do NOT perform any security analysis yet. Just gather the facts.
+
+### Search Strategy
+- Focus all file searches strictly within the current repository directory (`./` or `./taskManager/`).
+- Do NOT run broad glob searches on parent directories like `/workspace/nextgen` or root `/`.
+- Use targeted globs like `*.py` or `taskManager/*.py` to quickly locate source files.
 
 ### What to Collect
 1. **Routing & URL configuration** — Find all URL config files (urls.py). List every route and the view it maps to.
@@ -71,6 +83,10 @@ OWASP Top 10 vulnerabilities and Django-specific flaws.
 
 You have received an initial context inventory of the codebase (routes, views, models, middleware, permissions).
 Your job is to build an **in-depth, highly accurate security review plan** using structured reflection to minimize false positives.
+
+### File Search Strategy
+- All file inspections must be relative to the repository root (`./` or `taskManager/`).
+- Do NOT run broad glob searches on parent directories like `/workspace/nextgen` or root `/`.
 
 ### Phase 1: Context Triage & Reflection Questions
 Before marking any code as insecure, answer these reflection questions:
@@ -139,31 +155,48 @@ Be specific. Cite exact file paths, function names, and line numbers.
 Do NOT pad findings — only report patterns with clear code evidence.
 """
 
-# --- Prompt 3: Review & Validation ---
+# --- Prompt 3: Review, Validation & Remediation Guidance (Combined) ---
 prompt_review_validate = """You are a senior security engineer performing final validation
-of potential OWASP 2025 A01: Broken Access Control findings in a Python/Django codebase.
+and generating remediation guidance for OWASP & Django vulnerabilities in a Python/Django codebase.
 
-You have a list of suspected findings from a prior analysis. For EACH finding, you must:
+You have a list of suspected findings from a prior analysis plan.
 
-### Validation Steps
-1. **Re-read the code** — Go back to the exact file and location cited. Read the full function/class, not just a snippet.
-2. **Trace the full request path** — Follow the request from URL routing through middleware, through the view, to the database query. Check if access control is enforced at ANY layer (middleware, decorator, view logic, queryset filtering).
-3. **Check for indirect protections** — Is there global middleware that enforces auth? Does the queryset filter by the current user even without an explicit check? Is the view behind a protected URL namespace?
-4. **Challenge the finding** — Ask: "Could an attacker actually exploit this?" If the answer is no because of a protection you missed, downgrade or dismiss the finding.
+### File Search Strategy
+- All file inspections must be relative to the repository root (`./` or `taskManager/`).
+- Do NOT run broad glob searches on parent directories like `/workspace/nextgen` or root `/`.
+
+### Validation & Remediation Steps
+1. **Re-read the code** — Go back to the exact file and location cited. Read the full function/class.
+2. **Trace the request path** — Follow the request from URL routing through middleware, view logic, and ORM query.
+3. **Check for indirect protections** — Is there global middleware enforcing auth? Is the query scoped by `request.user`?
+4. **Challenge the finding** — Ask: "Could an attacker actually exploit this?" Downgrade or dismiss if protected.
 5. **Confirm or reject** — Mark each finding as CONFIRMED, DOWNGRADED, or FALSE_POSITIVE with an explanation.
+6. **Fetch OWASP Remediation Guidance** — For EACH `CONFIRMED` finding, call the `get_owasp_cheatsheet` tool using its CWE ID or vulnerability category (e.g. `CWE-639`, `IDOR`, `CWE-862`, `CWE-89`, `CSRF`) to retrieve authoritative OWASP Cheat Sheet guidance.
+7. **Generate Code Remediation Patch** — For EACH `CONFIRMED` finding, provide actionable remediation guidance and a production-ready Python/Django code patch directly inside the validated finding structure.
 
-### Output Format
-Produce a final report in JSON:
+### Final Validation & Remediation Output Format (Required JSON)
+Your final response MUST be in valid JSON format containing these required fields:
 ```json
 {{
+  "is_insecure": true,
+  "reason": "Detailed summary explaining why the application is considered insecure or secure based on validated findings.",
   "validated_findings": [
     {{
-      "original_finding": "Brief description from the analysis plan",
+      "finding_id": "FINDING-01",
+      "cwe": "CWE-639",
+      "title": "Insecure Direct Object Reference (IDOR) in Task Detail View",
       "status": "CONFIRMED | DOWNGRADED | FALSE_POSITIVE",
-      "evidence": "The specific code/logic that confirms or refutes the finding",
-      "exploit_scenario": "If CONFIRMED: how an attacker would exploit this, step by step",
-      "remediation": "If CONFIRMED: specific code change recommended",
-      "severity": "critical | high | medium | low | informational"
+      "file": "path/to/file.py",
+      "location": "function_name() line range",
+      "severity": "critical | high | medium | low",
+      "confidence": "high | medium | low",
+      "evidence": "Exact code snippet or logic flaw",
+      "exploit_scenario": "Step-by-step scenario an attacker would use to exploit this",
+      "remediation_guidance": {{
+        "owasp_guidance": "Authoritative guidance fetched from OWASP Cheat Sheet tool",
+        "recommended_fix_description": "Explanation of the required security fix",
+        "remediated_code_patch": "Python/Django code snippet showing the secure implementation"
+      }}
     }}
   ],
   "overall_assessment": {{
@@ -171,22 +204,27 @@ Produce a final report in JSON:
     "total_downgraded": 0,
     "total_false_positives": 0,
     "risk_rating": "critical | high | medium | low",
-    "summary": "2-3 sentence summary of the access control posture"
+    "summary": "2-3 sentence overview of security posture"
   }}
 }}
 ```
 
-Be ruthless about false positives. A finding with no realistic exploit path is not a finding.
+Note: For `DOWNGRADED` or `FALSE_POSITIVE` findings, set `"remediation_guidance": null`.
+Be ruthless about false positives. A finding with no realistic exploit path is NOT a vulnerability.
 """
 
 
 # ------------------------------------------------------------------------------
 # Step Factory (follows audit.py LCEL pattern)
 # ------------------------------------------------------------------------------
-def new_step(name: str, system_prompt: str):
+def new_step(name: str, system_prompt: str, extra_tools=None):
+    step_tools = [FetchURLTool()]
+    if extra_tools:
+        step_tools.extend(extra_tools)
+
     agent = create_deep_agent(
         model=llm,
-        tools=[FetchURLTool()],
+        tools=step_tools,
         backend=filesystem_backend,
         system_prompt=system_prompt,
         skills=[skills_dir],
@@ -232,8 +270,20 @@ def new_step(name: str, system_prompt: str):
 
         steps_dir = os.path.join(SCRIPT_DIR, "steps")
         os.makedirs(steps_dir, exist_ok=True)
-        with open(os.path.join(steps_dir, f"{name}.txt"), "w") as fh:
+        with open(os.path.join(steps_dir, f"{name}.txt"), "w", encoding="utf-8") as fh:
             fh.write(final_output)
+
+        # Also save JSON output directly to exercise-08 folder if step produces JSON
+        if "```json" in final_output:
+            try:
+                parts = final_output.split("```json")
+                json_content = parts[-1].split("```")[0].strip()
+                json_file_path = os.path.join(SCRIPT_DIR, f"{name}.json")
+                with open(json_file_path, "w", encoding="utf-8") as fh:
+                    fh.write(json_content)
+                print(f"  -> Saved {name}.json to exercise-08/")
+            except Exception as e:
+                print(f"  -> Failed to extract JSON for {name}: {e}")
 
         return final_output
 
@@ -241,11 +291,15 @@ def new_step(name: str, system_prompt: str):
 
 
 # ------------------------------------------------------------------------------
-# LCEL Chain — Context Collection | Analysis Plan | Review & Validation
+# LCEL Chain — Context Collection | Analysis Plan | Review & Validation (with Remediation)
 # ------------------------------------------------------------------------------
 collect_step = new_step(name="collect_context", system_prompt=prompt_collect_context)
 analyze_step = new_step(name="analysis_plan", system_prompt=prompt_analysis_plan)
-validate_step = new_step(name="review_validate", system_prompt=prompt_review_validate)
+validate_step = new_step(
+    name="review_validate",
+    system_prompt=prompt_review_validate,
+    extra_tools=[OWASPCheatSheetTool()],
+)
 
 full_chain = (
     RunnableLambda(lambda task: task)
@@ -260,6 +314,6 @@ if __name__ == "__main__":
     print("=" * 60)
 
     full_chain.invoke(
-        "Explore the codebase and collect a full access control inventory. "
-        "Start with the directory structure, then read all relevant files."
+        "Explore the Python/Django codebase in `./` (such as `./taskManager/`) and collect a full access control inventory. "
+        "Use targeted file searches for `.py` files inside `./` and avoid globbing parent workspace directories."
     )
