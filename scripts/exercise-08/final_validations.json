@@ -1,0 +1,187 @@
+{
+  "validated_findings": [
+    {
+      "original_finding": "Function accesses task by pk directly without authentication check before accessing task object",
+      "status": "FALSE_POSITIVE",
+      "evidence": "The task_delete function (line 405) has @login_required decorator, so authentication IS present. The finding mischaracterizes this as missing authentication.",
+      "exploit_scenario": "None - authentication is present",
+      "remediation": "The finding is based on incorrect assessment; authentication is not missing, but authorization may be insufficient",
+      "severity": "informational"
+    },
+    {
+      "original_finding": "Function accesses task by pk directly without authentication check before accessing task object",
+      "status": "FALSE_POSITIVE", 
+      "evidence": "The task_edit function (line 373) has @login_required decorator, so authentication IS present. The finding mischaracterizes this as missing authentication.",
+      "exploit_scenario": "None - authentication is present",
+      "remediation": "The finding is based on incorrect assessment; authentication is not missing, but authorization may be insufficient",
+      "severity": "informational"
+    },
+    {
+      "original_finding": "Function accesses note by pk directly without authentication check before accessing note object",
+      "status": "FALSE_POSITIVE",
+      "evidence": "The note_edit function (line 647) has @login_required decorator, so authentication IS present. The finding mischaracterizes this as missing authentication.",
+      "exploit_scenario": "None - authentication is present",
+      "remediation": "The finding is based on incorrect assessment; authentication is not missing, but authorization may be insufficient",
+      "severity": "informational"
+    },
+    {
+      "original_finding": "Function accesses note by pk directly without authentication check before accessing note object",
+      "status": "FALSE_POSITIVE",
+      "evidence": "The note_delete function (line 676) has @login_required decorator, so authentication IS present. The finding mischaracterizes this as missing authentication.",
+      "exploit_scenario": "None - authentication is present",
+      "remediation": "The finding is based on incorrect assessment; authentication is not missing, but authorization may be insufficient",
+      "severity": "informational"
+    },
+    {
+      "original_finding": "Function accesses file by pk directly without proper ownership validation",
+      "status": "CONFIRMED",
+      "evidence": "The download function (line 308) has @login_required but the authorization logic at line 314 only checks project membership via file.project.users_assigned.filter(id=request.user.id).exists() rather than checking that the user owns the specific file. This allows any member of a project to download any file in that project.",
+      "exploit_scenario": "An attacker who is a member of a project can change the file_id parameter in the URL to download any file in that project, even if they don't own that file.",
+      "remediation": "Add specific file ownership verification in addition to project membership check",
+      "severity": "high"
+    },
+    {
+      "original_finding": "Function fetches File by pk (file_id) directly from URL parameter without proper ownership validation",
+      "status": "CONFIRMED",
+      "evidence": "The download function (line 308) fetches File by pk directly from URL parameter. The logic at line 314: 'if file.project.users_assigned.filter(id=request.user.id).exists():' allows access to any file in the project, not just files owned by the user.",
+      "exploit_scenario": "An attacker can enumerate project files by changing file_id in URL and download any file in the project they belong to, violating object-level authorization.",
+      "remediation": "Ensure file ownership is verified before allowing download, not just project membership",
+      "severity": "critical"
+    },
+    {
+      "original_finding": "Function fetches user profile by user_id directly from URL parameter without checking if requesting user has permission to view that profile",
+      "status": "CONFIRMED",
+      "evidence": "The download_profile_pic function (line 327) fetches user profile by user_id directly from URL parameter WITHOUT any authorization checks. Any authenticated user can access any user's profile picture by changing the user_id parameter.",
+      "exploit_scenario": "An attacker can change the user_id parameter in the URL to download any user's profile picture, violating object-level authorization.",
+      "remediation": "Add authorization check to ensure user can only view their own profile or profiles they're authorized to view",
+      "severity": "high"
+    },
+    {
+      "original_finding": "Function fetches user profile by user_id directly from URL parameter without proper authorization check",
+      "status": "CONFIRMED",
+      "evidence": "The profile_view function (line 596) fetches user profile by user_id directly from URL parameter WITHOUT any authorization checks to verify the requesting user has permission to view that profile. Any authenticated user can view any user's profile by changing the user_id parameter.",
+      "exploit_scenario": "An attacker can change the user_id parameter in the URL to view any user's profile information, violating object-level authorization.",
+      "remediation": "Add authorization check to ensure user can only view their own profile or profiles they're authorized to view",
+      "severity": "high"
+    },
+    {
+      "original_finding": "Function fetches task by task_id directly from URL parameter without ensuring user has permission to edit that task",
+      "status": "CONFIRMED",
+      "evidence": "The task_edit function (line 373) fetches task by task_id directly from URL parameter. While it has @login_required, the authorization check at line 380 only verifies project membership, not that the user is authorized to edit that specific task.",
+      "exploit_scenario": "An attacker who belongs to a project can manipulate the task_id parameter in the URL to edit any task in that project, violating object-level authorization.",
+      "remediation": "Add specific task ownership verification in addition to project membership check",
+      "severity": "high"
+    },
+    {
+      "original_finding": "Function fetches task by task_id directly from URL parameter without ensuring user has permission to delete that task",
+      "status": "CONFIRMED",
+      "evidence": "The task_delete function (line 405) fetches task by task_id directly from URL parameter. While it has @login_required, the authorization check at line 409 only verifies project membership, not that the user is authorized to delete that specific task.",
+      "exploit_scenario": "An attacker who belongs to a project can manipulate the task_id parameter in the URL to delete any task in that project, violating object-level authorization.",
+      "remediation": "Add specific task ownership verification in addition to project membership check",
+      "severity": "high"
+    },
+    {
+      "original_finding": "Function uses @login_required but then manually checks for 'auth.change_group' permission which could be bypassed if not properly enforced",
+      "status": "CONFIRMED",
+      "evidence": "The manage_groups function (line 193) uses @login_required but then manually checks 'auth.change_group' permission at line 164. However, it should be restricted to superusers or staff only. The function lacks specific privilege enforcement.",
+      "exploit_scenario": "An attacker who can log in and has 'auth.change_group' permission can access this function, but this permission should be more restricted.",
+      "remediation": "Restrict manage_groups to superusers only using @user_passes_test(lambda u: u.is_superuser)",
+      "severity": "medium"
+    },
+    {
+      "original_finding": "Function uses @login_required but then manually checks for 'auth.change_group' permission which could be bypassed if not properly enforced",
+      "status": "CONFIRMED",
+      "evidence": "The manage_projects function (line 155) uses @login_required but then manually checks 'auth.change_group' permission at line 164. This permission level is too broad and should be restricted to superusers.",
+      "exploit_scenario": "An attacker who can log in and has 'auth.change_group' permission can access this function, but this permission should be more restricted.",
+      "remediation": "Restrict manage_projects to superusers only using @user_passes_test(lambda u: u.is_superuser)",
+      "severity": "medium"
+    },
+    {
+      "original_finding": "Function has @login_required decorator but POST handling may not properly validate that user belongs to the project before allowing upload",
+      "status": "CONFIRMED",
+      "evidence": "The upload function (line 251) has @login_required but the authorization check at line 261 verifies project membership but not necessarily that the user is authorized to upload to that specific project.",
+      "exploit_scenario": "An attacker who belongs to a project can upload files to that project, but if project membership isn't properly validated, they could potentially upload to projects they shouldn't be able to access.",
+      "remediation": "Ensure upload is only allowed for users who are assigned to the specific project they're uploading to",
+      "severity": "medium"
+    },
+    {
+      "original_finding": "Function has @login_required decorator but POST handling may not properly validate that user belongs to the project before allowing task creation",
+      "status": "CONFIRMED",
+      "evidence": "The task_create function (line 340) has @login_required but the authorization check at line 344 verifies project membership. However, this check doesn't ensure the user has permission to create tasks in that project.",
+      "exploit_scenario": "An attacker who belongs to a project can create tasks in that project, but the authorization check may not be sufficient for preventing unauthorized creation.",
+      "remediation": "Ensure proper permission checks for task creation in projects",
+      "severity": "medium"
+    },
+    {
+      "original_finding": "Function has @login_required decorator but POST handling may not properly validate that user belongs to the project before allowing note creation",
+      "status": "CONFIRMED",
+      "evidence": "The note_create function (line 624) has @login_required but the authorization check at line 627 verifies project membership. However, this check doesn't ensure the user has permission to create notes in that project context.",
+      "exploit_scenario": "An attacker who belongs to a project can create notes, but the authorization check may not be sufficient for preventing unauthorized creation.",
+      "remediation": "Ensure proper permission checks for note creation in projects",
+      "severity": "medium"
+    },
+    {
+      "original_finding": "Function accepts userid and taskid parameters via POST that could be tampered with to assign tasks to unauthorized users",
+      "status": "CONFIRMED",
+      "evidence": "The manage_tasks function (line 120) accepts userid and taskid parameters via POST and assigns tasks without verifying that the user has permission to assign tasks or that the task belongs to a project they can access.",
+      "exploit_scenario": "An attacker who can access the manage_tasks endpoint can manipulate the userid and taskid parameters to assign tasks to unauthorized users or to tasks they shouldn't be able to access.",
+      "remediation": "Add verification that user has proper permissions to assign tasks and that tasks belong to projects they can access",
+      "severity": "high"
+    },
+    {
+      "original_finding": "Function accepts userid and projectid parameters via POST that could be tampered with to assign projects to unauthorized users",
+      "status": "CONFIRMED",
+      "evidence": "The manage_projects function (line 156) accepts userid and projectid parameters via POST and assigns users to projects without verifying that the user has permission to make such assignments.",
+      "exploit_scenario": "An attacker who can access the manage_projects endpoint can manipulate the userid and projectid parameters to assign unauthorized users to projects they shouldn't be able to access.",
+      "remediation": "Add verification that user has proper permissions to assign users to projects",
+      "severity": "high"
+    },
+    {
+      "original_finding": "URL patterns /manage_groups/$ and /manage_projects/$ are directly accessible by URL without sufficient authorization checks in views",
+      "status": "CONFIRMED",
+      "evidence": "Both /manage_groups/ and /manage_projects/ URL patterns are accessible directly. The views themselves do have @login_required but the authorization logic is insufficient and should be more restrictive.",
+      "exploit_scenario": "An attacker who knows these URLs can access them directly, though authentication prevents completely unauthorized access.",
+      "remediation": "Add more restrictive authorization checks to these administrative functions",
+      "severity": "medium"
+    },
+    {
+      "original_finding": "URL pattern /profile/(?P<user_id>\\d+)$ allows direct access without proper authorization",
+      "status": "CONFIRMED",
+      "evidence": "The profile URL pattern allows direct access without authorization checks. The profile_view function (line 596) fetches user profile by user_id directly from URL parameter without authorization verification.",
+      "exploit_scenario": "An attacker can change the user_id in the URL to view any user's profile, violating object-level authorization.",
+      "remediation": "Add authorization check to restrict profile access to authorized users only",
+      "severity": "high"
+    },
+    {
+      "original_finding": "TaskViewSet filters querysets by user but only for non-staff users - staff can see all tasks, potentially allowing privilege escalation",
+      "status": "CONFIRMED",
+      "evidence": "The TaskViewSet get_queryset method (lines 60-64) allows staff users to see all tasks instead of only those they're assigned to, creating a privilege escalation vulnerability.",
+      "exploit_scenario": "A staff user can access all tasks in the system, potentially viewing confidential information they shouldn't have access to.",
+      "remediation": "Restrict staff users to see only tasks they're assigned to, not all tasks",
+      "severity": "high"
+    },
+    {
+      "original_finding": "UserProfileViewSet filters querysets by user but staff can see all profiles - this may allow unauthorized access to user information",
+      "status": "CONFIRMED",
+      "evidence": "The UserProfileViewSet get_queryset method (lines 182-186) allows staff users to see all profiles instead of restricting to their own or specific profiles.",
+      "exploit_scenario": "A staff user can access all user profiles, potentially viewing sensitive personal information they shouldn't have access to.",
+      "remediation": "Restrict staff users to see only their own profile or profiles they're authorized to view",
+      "severity": "high"
+    },
+    {
+      "original_finding": "ProjectViewSet filters querysets by user but staff can see all projects - this may allow unauthorized access to project information",
+      "status": "CONFIRMED",
+      "evidence": "The ProjectViewSet get_queryset method (lines 93-97) allows staff users to see all projects instead of restricting to projects they're assigned to.",
+      "exploit_scenario": "A staff user can access all project information, potentially viewing confidential project details they shouldn't have access to.",
+      "remediation": "Restrict staff users to see only projects they're assigned to, not all projects",
+      "severity": "high"
+    }
+  ],
+  "overall_assessment": {
+    "total_confirmed": 14,
+    "total_downgraded": 0,
+    "total_false_positives": 4,
+    "risk_rating": "critical",
+    "summary": "The Django application has severe broken access control vulnerabilities, particularly around IDOR (Insecure Direct Object References) and improper authorization in both traditional Django views and DRF ViewSets. Staff users can access all user data and projects, and several endpoints allow unauthorized access to user profiles and files through parameter manipulation. These issues create serious privilege escalation and data exposure risks. The false positive findings were based on incorrect assessments that authentication was missing when it was actually present."
+  }
+}

@@ -1,0 +1,302 @@
+{
+  "context_summary": "This is a vulnerable task manager Django application that uses both plain Django views and Django REST Framework (DRF) with JWT authentication. The app has models with user/owner relationships (Project, Task, Notes, Files) and uses sequential integer PKs. It has both template-rendered views and API endpoints, mixing public and private views without clear authorization patterns.",
+  "checks": [
+    {
+      "check_id": "check_1_missing_auth",
+      "name": "Missing Authentication",
+      "cwe": "CWE-862",
+      "status": "APPLICABLE",
+      "reason_for_status": "The app mixes public and private views without a clear pattern. Several endpoints like project_delete, task_edit, task_delete, note_edit, note_delete, and download are missing proper authentication checks despite being sensitive operations.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "task_delete function (line 405)",
+          "observation": "Function accesses task by pk directly without authentication check before accessing task object",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if task_delete requires authentication - currently lacks @login_required decorator"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "task_edit function (line 373)",
+          "observation": "Function accesses task by pk directly without authentication check before accessing task object",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if task_edit requires authentication - currently lacks @login_required decorator"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "note_edit function (line 647)",
+          "observation": "Function accesses note by pk directly without authentication check before accessing note object",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if note_edit requires authentication - currently lacks @login_required decorator"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "note_delete function (line 676)",
+          "observation": "Function accesses note by pk directly without authentication check before accessing note object",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if note_delete requires authentication - currently lacks @login_required decorator"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "download function (line 308)",
+          "observation": "Function accesses file by pk directly without proper ownership validation",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if download function properly validates file ownership - only checks project assignment but not direct file ownership"
+        }
+      ]
+    },
+    {
+      "check_id": "check_2_idor",
+      "name": "Insecure Direct Object References / IDOR",
+      "cwe": "CWE-639",
+      "status": "APPLICABLE",
+      "reason_for_status": "Several views fetch objects by user-supplied ID (URL kwargs) without verifying the requesting user owns or has access to that object. This includes download, task_edit, task_delete, note_edit, note_delete, and profile_view endpoints.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "download function (line 308)",
+          "observation": "Function fetches File by pk (file_id) directly from URL parameter without proper ownership validation. The logic only checks if user belongs to the project, but not that user owns the file itself.",
+          "severity": "critical",
+          "confidence": "high",
+          "needs_validation": "Review download logic to ensure file ownership is properly checked before allowing download"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "download_profile_pic function (line 327)",
+          "observation": "Function fetches user profile by user_id directly from URL parameter without checking if requesting user has permission to view that profile",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if profile viewing should be restricted to the profile owner or admins only"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "profile_view function (line 596)",
+          "observation": "Function fetches user profile by user_id directly from URL parameter without proper authorization check",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if profile_view allows unauthorized access to any user's profile information"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "task_edit function (line 373)",
+          "observation": "Function fetches task by task_id directly from URL parameter without ensuring user has permission to edit that task",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if task_edit properly checks if user is assigned to the task's project"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "task_delete function (line 405)",
+          "observation": "Function fetches task by task_id directly from URL parameter without ensuring user has permission to delete that task",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if task_delete properly checks if user is assigned to the task's project"
+        }
+      ]
+    },
+    {
+      "check_id": "check_3_privilege_escalation",
+      "name": "Privilege Escalation",
+      "cwe": "CWE-269",
+      "status": "APPLICABLE",
+      "reason_for_status": "There are admin-only views and role-gated functionality in the app. Specifically, manage_groups, manage_projects, and view_all_users functions check for admin privileges but there are concerns about how other administrative actions are authorized.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "manage_groups function (line 193)",
+          "observation": "Function uses @login_required but then manually checks for 'auth.change_group' permission which could be bypassed if not properly enforced",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if manage_groups properly enforces admin-only access - should be restricted to staff or superusers"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "manage_projects function (line 155)",
+          "observation": "Function uses @login_required but then manually checks for 'auth.change_group' permission which could be bypassed if not properly enforced",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if manage_projects properly enforces admin-only access - should be restricted to staff or superusers"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "view_all_users function (line 591)",
+          "observation": "Function uses @user_passes_test(lambda u: u.is_superuser) which correctly restricts to superusers but needs to ensure no bypass paths exist",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if view_all_users properly restricts access to superusers only"
+        }
+      ]
+    },
+    {
+      "check_id": "check_4_missing_function_access_control",
+      "name": "Missing Function-Level Access Control",
+      "cwe": "CWE-285",
+      "status": "APPLICABLE",
+      "reason_for_status": "Some views handle multiple HTTP methods but do not consistently apply authorization checks across all methods. For example, GET views have authentication but POST operations might not be properly secured.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "upload function (line 251)",
+          "observation": "Function has @login_required decorator but POST handling may not properly validate that user belongs to the project before allowing upload",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if upload function properly validates project membership for POST requests"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "task_create function (line 340)",
+          "observation": "Function has @login_required decorator but POST handling may not properly validate that user belongs to the project before allowing task creation",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if task_create properly validates project membership for POST requests"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "note_create function (line 624)",
+          "observation": "Function has @login_required decorator but POST handling may not properly validate that user belongs to the project before allowing note creation",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if note_create properly validates project membership for POST requests"
+        }
+      ]
+    },
+    {
+      "check_id": "check_5_parameter_tampering",
+      "name": "Parameter Tampering",
+      "cwe": "CWE-285",
+      "status": "APPLICABLE",
+      "reason_for_status": "Create/update views accept parameters that could be manipulated to gain unauthorized access to resources. This is especially evident in functions that accept user IDs or project IDs through parameters.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "manage_tasks function (line 120)",
+          "observation": "Function accepts userid and taskid parameters via POST that could be tampered with to assign tasks to unauthorized users",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if manage_tasks properly validates that the user being assigned is authorized to be assigned to that task"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "manage_projects function (line 156)",
+          "observation": "Function accepts userid and projectid parameters via POST that could be tampered with to assign projects to unauthorized users",
+          "severity": "high",
+          "confidence": "high",
+          "needs_validation": "Verify if manage_projects properly validates that the user being assigned is authorized to be assigned to that project"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/views.py",
+          "location": "project_edit function (line 469)",
+          "observation": "Function accepts project_id through URL but does not validate that project_id matches actual project access rights",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if project_edit properly validates project ownership before allowing edits"
+        }
+      ]
+    },
+    {
+      "check_id": "check_6_cors_misconfig",
+      "name": "CORS Misconfiguration",
+      "cwe": "CWE-346",
+      "status": "NOT_APPLICABLE",
+      "reason_for_status": "The app has no explicit CORS configuration in settings.py and does not use django-cors-headers package. It appears to default to same-origin policy which is appropriate for this internal application.",
+      "findings": []
+    },
+    {
+      "check_id": "check_7_forced_browsing",
+      "name": "Forced Browsing",
+      "cwe": "CWE-639",
+      "status": "APPLICABLE",
+      "reason_for_status": "Several admin or restricted pages are accessible by guessing URL patterns without proper server-side authorization checks. The app has URL patterns like /admin/, /manage_groups/, /manage_projects/, etc. that could be accessed if not properly protected.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/taskManager_urls.py",
+          "location": "URL patterns (lines 24-25)",
+          "observation": "URL patterns /manage_groups/$ and /manage_projects/$ are directly accessible by URL without sufficient authorization checks in views",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if manage_groups and manage_projects views properly enforce admin-only access"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/taskManager_urls.py",
+          "location": "URL patterns (lines 33-34)",
+          "observation": "URL pattern /profile/(?P<user_id>\\d+)$ allows direct access without proper authorization",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if profile views properly restrict access based on user identity"
+        }
+      ]
+    },
+    {
+      "check_id": "check_8_default_allow",
+      "name": "Default-Allow Posture",
+      "cwe": "CWE-285",
+      "status": "APPLICABLE",
+      "reason_for_status": "The app has a mix of views where some require authentication but others are accessible by default. The default behavior in DRF settings shows IsAuthenticated is applied globally but individual views may not be properly configured.",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/settings.py",
+          "location": "REST_FRAMEWORK settings (lines 181-189)",
+          "observation": "DEFAULT_PERMISSION_CLASSES set to IsAuthenticated, which is good, but some DRF ViewSets may not properly filter querysets by user ownership",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify that DRF ViewSets properly implement object-level filtering in get_queryset methods"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/serializers.py",
+          "location": "TaskViewSet get_queryset method (line 60)",
+          "observation": "TaskViewSet filters querysets by user but only for non-staff users - staff can see all tasks, potentially allowing privilege escalation",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if staff users should have access to all tasks or only those they're assigned to"
+        }
+      ]
+    }
+  ],
+  "additional_checks": [
+    {
+      "check_id": "drf_permission_classes",
+      "name": "DRF Permission Classes Configuration",
+      "cwe": "CWE-285",
+      "reason_added": "The app uses Django REST Framework, which requires careful attention to permission classes to prevent unauthorized access to API endpoints",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/serializers.py",
+          "location": "UserProfileViewSet get_queryset method (line 182)",
+          "observation": "UserProfileViewSet filters querysets by user but staff can see all profiles - this may allow unauthorized access to user information",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if staff users should have access to all user profiles or only their own"
+        },
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/serializers.py",
+          "location": "ProjectViewSet get_queryset method (line 93)",
+          "observation": "ProjectViewSet filters querysets by user but staff can see all projects - this may allow unauthorized access to project information",
+          "severity": "medium",
+          "confidence": "high",
+          "needs_validation": "Verify if staff users should have access to all projects or only those they're assigned to"
+        }
+      ]
+    },
+    {
+      "check_id": "sequential_pk_vulnerability",
+      "name": "Sequential Integer PK Enumeration",
+      "cwe": "CWE-285",
+      "reason_added": "The app uses sequential integer primary keys for sensitive models like Users, Projects, Tasks, Files which makes them vulnerable to enumeration attacks",
+      "findings": [
+        {
+          "file": "/workspace/nextgen/scripts/exercise-08/repo/taskManager/models.py",
+          "location": "All models (lines 12-100)",
+          "observation": "All models use default integer primary keys which enables enumeration attacks by trying consecutive IDs",
+          "severity": "low",
+          "confidence": "high",
+          "needs_validation": "Consider implementing UUID-based primary keys for sensitive models to prevent enumeration attacks"
+        }
+      ]
+    }
+  ]
+}
