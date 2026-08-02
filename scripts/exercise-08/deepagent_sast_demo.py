@@ -66,128 +66,77 @@ Do NOT make security judgments. Just collect the raw facts.
 """
 
 # --- Prompt 2: Analysis & Review Plan ---
-prompt_analysis_plan = """You are a security engineer analyzing a Python/Django codebase for
-OWASP 2025 A01: Broken Access Control vulnerabilities.
+prompt_analysis_plan = """You are a senior security engineer analyzing a Python/Django codebase for
+OWASP Top 10 vulnerabilities and Django-specific flaws.
 
-You have already collected a context inventory of the codebase (routes, views, models,
-middleware, permissions). Your job is to build an **adaptive review plan** — not a static
-checklist. Use the context inventory to decide which checks are relevant and which are not.
+You have received an initial context inventory of the codebase (routes, views, models, middleware, permissions).
+Your job is to build an **in-depth, highly accurate security review plan** using structured reflection to minimize false positives.
 
-### Step 1: Triage the Context
+### Phase 1: Context Triage & Reflection Questions
+Before marking any code as insecure, answer these reflection questions:
+- *Is this control really bypassed or missing?*
+- *Is global authentication/authorization enforced via middleware or URL namespace decorators?*
+- *Does the view query automatically scope objects using `request.user` (e.g., `Task.objects.filter(owner=request.user)`)?*
+- *Am I certain about this finding, or am I making assumptions without reading the full view definition?*
+- *What exact payload or HTTP request would an attacker send to exploit this?*
 
-Before running any checks, read the context inventory and answer these questions:
-- Does the app use Django REST Framework, plain Django views, or both?
-- Are there API endpoints that return JSON, or only template-rendered HTML views?
-- Is there global authentication middleware, or is auth enforced per-view?
-- Are there models with user/owner foreign keys?
-- Does the app have an admin interface or admin-only views?
-- Is there any CORS configuration (django-cors-headers, custom middleware)?
-- Does the app use sequential integer PKs or UUIDs for sensitive models?
+### Phase 2: Targeted Check Evaluation
 
-Use your answers to ADD relevant checks and REMOVE irrelevant ones below.
-
-### Step 2: Run Each Discrete Check
-
-Evaluate each sub-category independently. For each one, determine if it applies to this
-codebase based on the context, then either run the check or mark it as NOT_APPLICABLE.
+Evaluate each category below. For each check, specify if it is APPLICABLE or NOT_APPLICABLE based on the context:
 
 #### Check 1: Missing Authentication (CWE-862)
-Views/endpoints that should require login but do not have @login_required,
-LoginRequiredMixin, or permissions.IsAuthenticated.
-- SKIP IF: Global auth middleware forces login on all views.
-- ADD IF: The app mixes public and private views without a clear pattern.
+Views handling sensitive user data or actions lacking `@login_required`, `LoginRequiredMixin`, or DRF `IsAuthenticated`.
+- SKIP IF: Global middleware enforces login on all non-public routes.
 
 #### Check 2: Insecure Direct Object References / IDOR (CWE-639)
-Objects fetched by user-supplied ID (URL kwargs, GET/POST params) without verifying the
-requesting user owns or has access to that object.
-- SKIP IF: All querysets are globally filtered by request.user with no pk lookups.
-- ADD IF: Models have owner/user FKs and views do .get(pk=id) without ownership filtering.
+Objects fetched via user-supplied ID (`pk`, `id` in URL or POST params) without verifying ownership (`object.user == request.user`).
+- SKIP IF: All querysets are scoped globally by `request.user`.
 
-#### Check 3: Privilege Escalation (CWE-269)
-Endpoints where a regular user could perform admin-only actions, or an unauthenticated
-user could act as authenticated.
-- SKIP IF: There are no admin-only or role-gated views in the app.
-- ADD IF: There are views that check is_staff/is_superuser or use group-based permissions.
+#### Check 3: Privilege Escalation & FLAC (CWE-269 / CWE-285)
+Endpoints where regular users can execute staff/admin actions, or where POST/PUT/DELETE operations lack auth checks present on GET.
 
-#### Check 4: Missing Function-Level Access Control (CWE-285)
-POST/PUT/DELETE operations that lack authorization checks even when the corresponding
-GET endpoint is protected.
-- SKIP IF: All state-changing views have the same decorators as their read counterparts.
-- ADD IF: Views handle multiple HTTP methods and only check auth on GET.
+#### Check 4: Parameter Tampering & Mass Assignment (CWE-915)
+Views that accept `user_id` or `role` fields directly from client input instead of trusting `request.user` server-side.
 
-#### Check 5: Parameter Tampering
-Request parameters (URL params, form fields, JSON body) used to set ownership or access
-another user's resources without server-side validation. For example, a hidden form field
-for user_id that the server trusts instead of using request.user.
-- SKIP IF: All ownership is derived from request.user / auth token.
-- ADD IF: Create/update views accept a user or owner field from client input.
+#### Check 5: Injection Vulnerabilities (CWE-89 / CWE-79)
+Raw SQL string concatenation in ORM queries (`.extra()`, `.raw()`) or unescaped user inputs rendered in templates (`|safe`).
 
-#### Check 6: CORS Misconfiguration
-Overly permissive Access-Control-Allow-Origin settings that could allow unauthorized
-cross-origin API access.
-- SKIP IF: The app has no API endpoints, or no CORS configuration exists (same-origin only).
-- ADD IF: django-cors-headers is installed or custom CORS middleware/headers are present.
+#### Check 6: Security Misconfigurations & CSRF (CWE-352 / CWE-942)
+Abuse of `@csrf_exempt`, missing CSRF protection on state-changing endpoints, or overly permissive CORS settings.
 
-#### Check 7: Forced Browsing
-Admin or restricted pages accessible by guessing or manipulating URLs without proper
-server-side authorization checks.
-- SKIP IF: There are no admin-only URL patterns or all are behind auth middleware.
-- ADD IF: There are URL patterns like /admin/, /manage/, /dashboard/ that rely on
-  obscurity rather than access control.
+#### Check 7: Forced Browsing & Obscurity (CWE-425)
+Admin or privileged URL patterns (`/admin/`, `/manage/`) accessible without explicit authorization checks.
 
-#### Check 8: Default-Allow Posture
-Access is granted by default rather than denied by default. The app should require explicit
-grants rather than assuming access is allowed unless denied.
-- SKIP IF: Global middleware enforces deny-by-default.
-- ADD IF: New views are accessible by default and auth is opt-in via decorators.
+### Phase 3: Structured Output Format
 
-#### Additional Checks (Add Based on Context)
-If the context inventory reveals patterns not covered above, add new checks. Examples:
-- If DRF is used: check for missing or misconfigured DEFAULT_PERMISSION_CLASSES in settings.
-- If the app uses Django groups: check if group membership is verified before privileged ops.
-- If there are file upload/download views: check if file access is gated by ownership.
-- If the app has API token auth: check if tokens are scoped appropriately.
-
-### Step 3: Output Format
-
-Produce a review plan in JSON with each check as its own section:
+Produce a review plan in JSON format:
 ```json
 {{
-  "context_summary": "2-3 sentences summarizing what the app does and how auth works",
+  "context_summary": "2-3 sentences summarizing the app purpose and authentication posture",
   "checks": [
     {{
       "check_id": "check_1_missing_auth",
       "name": "Missing Authentication",
       "cwe": "CWE-862",
       "status": "APPLICABLE | NOT_APPLICABLE",
-      "reason_for_status": "Why this check applies or does not apply to this codebase",
+      "reason_for_status": "Why this check applies or does not apply",
       "findings": [
         {{
           "file": "file path",
           "location": "function/class name and line range",
-          "observation": "What you observed in the code",
+          "observation": "Exact code flaw observed",
           "severity": "critical | high | medium | low",
           "confidence": "high | medium | low",
-          "needs_validation": "What specifically should be verified in the next step"
+          "needs_validation": "Specific verification required in step 3"
         }}
       ]
-    }}
-  ],
-  "additional_checks": [
-    {{
-      "check_id": "descriptive_id",
-      "name": "Name of the check",
-      "cwe": "CWE number if applicable",
-      "reason_added": "Why this check was added based on the context",
-      "findings": []
     }}
   ]
 }}
 ```
 
 Be specific. Cite exact file paths, function names, and line numbers.
-Do NOT pad findings — only report patterns you actually see evidence for.
-If a check is NOT_APPLICABLE, its findings array should be empty.
+Do NOT pad findings — only report patterns with clear code evidence.
 """
 
 # --- Prompt 3: Review & Validation ---
