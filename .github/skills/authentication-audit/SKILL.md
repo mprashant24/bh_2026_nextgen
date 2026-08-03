@@ -11,13 +11,11 @@ This skill provides a systematic procedure for auditing codebases specifically f
 
 ---
 
-## 🛑 STRICT SCOPE CONSTRAINT & RATE-LIMITING PACING
+## 🛑 STRICT SCOPE CONSTRAINT
 
 > **CRITICAL MANDATE**: This skill is **STRICTLY CONSTRAINED** to authentication mechanisms, credential handling, session management, identity verification, and password/account security flaws.
 >
 > **DO NOT DRIFT** into auditing other vulnerability categories (e.g., Authorization/Access Control, SQL Injection, XSS, CSRF, Unsanitized Shell Commands, Dependency Scans) unless they directly impact identity verification or session state integrity. Disregard non-authentication findings to keep the report high-precision and laser-focused on Authentication & Session Security.
->
-> **LLM API CALL PACING**: To avoid exceeding model rate limits (e.g., 2,000,000 tokens/min), space out large file reads and tool calls. Batch inspect related files (such as initializers or controllers) in measured groups rather than issuing rapid sequential file-read requests.
 
 ---
 
