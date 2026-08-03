@@ -108,37 +108,84 @@ Systematically review the controller handlers, policy classes, and database quer
 
 ## 5. Output Report Requirements & Persistence
 
-Save the audit report as a Markdown (`.md`) file in the relevant location (e.g. `scripts/extras/exercise-14/<app>_authorization_audit.md` or `docs/<app>_authorization_audit.md`).
+To ensure complete, modular documentation, running this skill **MUST MANDATORILY GENERATE 3 SEPARATE MARKDOWN REPORTS** in the target directory (e.g. `scripts/extras/exercise-14/` or `docs/`):
 
-### Output Markdown Template:
+1. **Authorization Matrix Report**: `<app_name>_authorization_matrix.md`
+2. **Authorization Security Checklist**: `<app_name>_authorization_checklist.md`
+3. **Authorization Code Review & Findings Report**: `<app_name>_authorization_security_code_review.md`
 
-```markdown
-# Authorization & Access Control Audit Report
-
-## Application: `<App Name>`
-- **Assessed Commit**: `#<commit_hash>`
-- **Scope**: Strictly Access Control, Role Enforcement, BOLA/IDOR, and Authorization Guards.
+> **Note**: Do NOT combine all sections into a single file. Generate each of the three files below.
 
 ---
 
-## 1. Role-Based Authorization Matrix
+### Report 1 Template: `<app_name>_authorization_matrix.md`
 
-| Resource / Action | Policy / Controller Method | Public / Guest | Regular User | Scoped Role (e.g., Organizer) | Admin |
+```markdown
+# Application Authorization Matrix
+
+## Application: `<App Name>`
+- **Assessed Commit**: `#<commit_hash>`
+
+---
+
+## 1. Overview & Legend
+- `ALLOW` (✅): Permitted action
+- `DENY` (❌): Forbidden action
+- `OWNER` (👤): Permitted ONLY if user owns the specific resource
+- `SCOPED` (🔒): Permitted ONLY within user's assigned scope (Chapter, Org, Group)
+
+---
+
+## 2. Authorization Matrix Table
+
+| Resource / Action | Policy / Controller Method | Public / Guest | Regular User | Scoped Role | Admin |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **`<Resource>`** | | | | | |
 | `<Action Name>` | `<handler/policy>` | ❌ | 👤 (OWNER) | 🔒 (SCOPED) | ✅ |
 
 ---
 
-## 2. Targeted Authorization Review Checklist
-
-- [ ] **`<Route 1>`**: Verify object-level query scoping (`policy_scope`).
-- [ ] **`<Route 2>`**: Check role enforcement on state-changing POST/PUT/DELETE.
-- [ ] **`<Global>`**: Confirm no unauthenticated bypasses exist on sensitive endpoints.
+## 3. Policy Enforcement Architecture
+Explanation of central authorization enforcement mechanisms and policy resolution flows.
+```
 
 ---
 
-## 3. Confirmed Authorization Vulnerabilities
+### Report 2 Template: `<app_name>_authorization_checklist.md`
+
+```markdown
+# Application Authorization Security Review Checklist
+
+## Application: `<App Name>`
+- **Assessed Commit**: `#<commit_hash>`
+
+---
+
+## 1. High-Priority Route Authorization Checklist
+- [ ] **`<Route 1>`**: Verify object-level query scoping (`policy_scope`).
+- [ ] **`<Route 2>`**: Check role enforcement on state-changing POST/PUT/DELETE.
+
+## 2. Policy Enforcement & Guardrails Checklist
+- [ ] **Global Verification**: Confirm `after_action :verify_authorized` or equivalent global callback is active.
+- [ ] **Skip Authorization Review**: Audit occurrences of `skip_authorization` or `allow_anonymous`.
+
+## 3. Mass Assignment & Strong Parameters Checklist
+- [ ] Confirm role and permission fields are excluded from permitted parameter lists.
+```
+
+---
+
+### Report 3 Template: `<app_name>_authorization_security_code_review.md`
+
+```markdown
+# Authorization Security Code Review & Findings Report
+
+## Application: `<App Name>`
+- **Assessed Commit**: `#<commit_hash>`
+
+---
+
+## 1. Confirmed Authorization Vulnerabilities
 
 ### 🔴 Finding 1: `<Vulnerability Title>` (`<CWE ID>`)
 * **Vulnerability Type**: BOLA / Missing FLAC / Guard Bypass / Privilege Escalation
@@ -155,7 +202,7 @@ Save the audit report as a Markdown (`.md`) file in the relevant location (e.g. 
 
 ---
 
-## 4. Verified Secure Authorization Controls
+## 2. Verified Secure Authorization Controls
 
 * **`<Control Name>`** (`<file_path>:<line_numbers>`): Verified secure implementation of `<policy/check>`.
 ```
